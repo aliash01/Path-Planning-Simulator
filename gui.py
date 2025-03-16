@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
+import heapq
 
 class GridSizeDialog(simpledialog.Dialog):
     def __init__(self, parent, title=None, initial_width=5, initial_height=5):
@@ -159,6 +160,8 @@ class VisualGridEnv:
         tk.Button(sim_window, text="Set Goal Position", command=self.set_goal_position).pack(pady=20)
         tk.Button(sim_window, text="A*", command=self.a_star).pack(pady=20)
         tk.Button(sim_window, text="BFS", command=self.BFS).pack(pady=20)
+        tk.Button(sim_window, text="Dijkstra", command=self.dijkstra).pack(pady=5)
+        tk.Button(sim_window, text="DFS", command=self.DFS).pack(pady=5)
 
         tk.Label(sim_window, text="Simulation is running...", font=("Arial", 14)).pack(pady=20)
 
@@ -267,73 +270,64 @@ class VisualGridEnv:
                     self.grid[i][j] = "O"  
         self.update_grid_display()
 
+    def reconstruct_path(self, came_from, start, goal):
+        if goal not in came_from:
+            messagebox.showinfo("Dijkstra", "No path found!")
+            return
+
+        path = []
+        current = goal
+        while current != start:
+            path.append(current)
+            current = came_from[current]
+
+        for i, j in reversed(path):
+            if self.grid[i][j] not in ["S", "G"]:
+                self.grid[i][j] = "P"  
+
+        self.update_grid_display()
+        messagebox.showinfo("Dijkstra", "Path found!")
+
     def a_star(self):
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
 
+        import heapq
+
         def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])  # Manhattan distance
 
-        open_set = {start}  
-        closed_set = set()  
-
-        g_score = {start: 0}
-
-        f_score = {start: heuristic(start, goal)}
-
+        priority_queue = [(0, start)]
         came_from = {}
-
+        g_score = {start: 0}
+        f_score = {start: heuristic(start, goal)}
         directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
-        path_found = False
-
-        while open_set:
-
-            current = min(open_set, key=lambda x: f_score.get(x, float('inf')))
+        while priority_queue:
+            _, current = heapq.heappop(priority_queue)
 
             if current == goal:
-                path_found = True
                 break
-
-            open_set.remove(current)
-            closed_set.add(current)
 
             for dy, dx in directions:
                 neighbor = (current[0] + dy, current[1] + dx)
 
                 if (0 <= neighbor[0] < self.grid_height and
                     0 <= neighbor[1] < self.grid_width and
-                    self.grid[neighbor[0]][neighbor[1]] != "X" and
-                    neighbor not in closed_set):
+                    self.grid[neighbor[0]][neighbor[1]] != "X"):
 
-                    tentative_g_score = g_score[current] + 1
+                    temp_g_score = g_score[current] + 1
 
-                    if neighbor not in open_set:
-                        open_set.add(neighbor)
-                    elif tentative_g_score >= g_score.get(neighbor, float('inf')):
-                        continue
+                    if neighbor not in g_score or temp_g_score < g_score[neighbor]:
+                        g_score[neighbor] = temp_g_score
+                        f_score[neighbor] = temp_g_score + heuristic(neighbor, goal)
+                        heapq.heappush(priority_queue, (f_score[neighbor], neighbor))
+                        came_from[neighbor] = current
 
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g_score
-                    f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, goal)
+        self.reconstruct_path(came_from, start, goal)
 
-        if path_found:
-            path = []
-            current = goal
-            while current != start:
-                path.append(current)
-                current = came_from[current]
-
-            for i, j in reversed(path):
-                if self.grid[i][j] not in ["S", "G"]:
-                    self.grid[i][j] = "P"  
-
-            self.update_grid_display()
-            messagebox.showinfo("A* Search", "Path found!")
-        else:
-            messagebox.showinfo("A* Search", "No path found!")
 
     def BFS(self):
         self.clear_path()
@@ -341,21 +335,84 @@ class VisualGridEnv:
         if start is None or goal is None:
             return
 
-        queue = [start]  
-        visited = {start}  
-
-        came_from = {}
-
+        from collections import deque
+        queue = deque([start])
+        came_from = {start: None}
         directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
-        path_found = False
-
         while queue:
-            current = queue.pop(0)  
+            current = queue.popleft()
 
             if current == goal:
-                path_found = True
                 break
+
+            for dy, dx in directions:
+                neighbor = (current[0] + dy, current[1] + dx)
+
+                if (0 <= neighbor[0] < self.grid_height and
+                    0 <= neighbor[1] < self.grid_width and
+                    self.grid[neighbor[0]][neighbor[1]] != "X" and
+                    neighbor not in came_from):
+
+                    came_from[neighbor] = current
+                    queue.append(neighbor)
+
+        self.reconstruct_path(came_from, start, goal)
+
+
+    def dijkstra(self):
+        self.clear_path()
+        start, goal = self.find_start_and_goal()
+        if start is None or goal is None:
+            return
+
+        priority_queue = [(0, start)]  # (cost, node)
+        came_from = {}
+        cost_so_far = {start: 0}
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+
+        while priority_queue:
+            current_cost, current = heapq.heappop(priority_queue)
+
+            if current == goal:
+                break
+
+            for dy, dx in directions:
+                neighbor = (current[0] + dy, current[1] + dx)
+
+                if (0 <= neighbor[0] < self.grid_height and
+                    0 <= neighbor[1] < self.grid_width and
+                    self.grid[neighbor[0]][neighbor[1]] != "X"):
+
+                    new_cost = cost_so_far[current] + 1  # All moves cost 1
+
+                    if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+                        cost_so_far[neighbor] = new_cost
+                        heapq.heappush(priority_queue, (new_cost, neighbor))
+                        came_from[neighbor] = current
+
+        self.reconstruct_path(came_from, start, goal)
+
+    def DFS(self):
+        self.clear_path()
+        start, goal = self.find_start_and_goal()
+        if start is None or goal is None:
+            return
+
+        stack = [start]
+        came_from = {}
+        visited = set()
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+
+        while stack:
+            current = stack.pop()
+
+            if current == goal:
+                break
+
+            if current in visited:
+                continue
+            visited.add(current)
 
             for dy, dx in directions:
                 neighbor = (current[0] + dy, current[1] + dx)
@@ -365,25 +422,11 @@ class VisualGridEnv:
                     self.grid[neighbor[0]][neighbor[1]] != "X" and
                     neighbor not in visited):
 
-                    visited.add(neighbor)
-                    queue.append(neighbor)
                     came_from[neighbor] = current
+                    stack.append(neighbor)
 
-        if path_found:
-            path = []
-            current = goal
-            while current != start:
-                path.append(current)
-                current = came_from[current]
+        self.reconstruct_path(came_from, start, goal)
 
-            for i, j in reversed(path):
-                if self.grid[i][j] not in ["S", "G"]:
-                    self.grid[i][j] = "P"  
-
-            self.update_grid_display()
-            messagebox.showinfo("BFS Search", "Path found!")
-        else:
-            messagebox.showinfo("BFS Search", "No path found!")
 
     def update_grid_display(self):
         for i in range(self.grid_height):
