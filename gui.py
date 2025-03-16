@@ -55,16 +55,11 @@ class VisualGridEnv:
         self.menu_frame = tk.Frame(self.root)
         self.menu_frame.pack(pady=10)
 
-        self.toggle_btn = tk.Button(self.menu_frame, text="Toggle Obstacle Mode", command=self.toggle_obstacle_mode)
-        self.toggle_btn.grid(row=0, column=0, padx=5)
-
         self.resize_btn = tk.Button(self.menu_frame, text="Resize Grid", command=self.resize_grid)
         self.resize_btn.grid(row=0, column=1, padx=5)
 
         self.sim_btn = tk.Button(self.menu_frame, text="Run Simulation", command=self.run_simulation)
         self.sim_btn.grid(row=0, column=2, padx=5)
-
-        self.current_mode = "view"
 
         self.canvas_cells = []
         self.create_grid()
@@ -116,15 +111,6 @@ class VisualGridEnv:
                 self.grid[row][col] = "O"
                 self.canvas.itemconfig(self.canvas_cells[row][col], fill="white")
 
-    def toggle_obstacle_mode(self):
-
-        if self.current_mode == "toggle":
-            self.current_mode = "view"
-            self.toggle_btn.config(relief=tk.RAISED, text="Enable Obstacle Mode")
-        else:
-            self.current_mode = "toggle"
-            self.toggle_btn.config(relief=tk.SUNKEN, text="Disable Obstacle Mode")
-
     def resize_grid(self):
         try:
             dialog = GridSizeDialog(
@@ -156,16 +142,85 @@ class VisualGridEnv:
         sim_window.title("Simulation")
         sim_window.geometry("400x300")  
 
-        tk.Button(sim_window, text="Set Start Position", command=self.set_start_position).pack(pady=20)
-        tk.Button(sim_window, text="Set Goal Position", command=self.set_goal_position).pack(pady=20)
-        tk.Button(sim_window, text="A*", command=self.a_star).pack(pady=20)
-        tk.Button(sim_window, text="BFS", command=self.BFS).pack(pady=20)
-        tk.Button(sim_window, text="Dijkstra", command=self.dijkstra).pack(pady=5)
-        tk.Button(sim_window, text="DFS", command=self.DFS).pack(pady=5)
+        main_window_x = self.root.winfo_x()
+        main_window_width = self.root.winfo_width()
+        sim_window_x = main_window_x + main_window_width + 10  
+        main_window_y = self.root.winfo_y()
+        sim_window.geometry(f"+{sim_window_x}+{main_window_y}")
 
-        tk.Label(sim_window, text="Simulation is running...", font=("Arial", 14)).pack(pady=20)
+        mode_frame = tk.Frame(sim_window)
+        mode_frame.pack(pady=10)
 
+        self.placement_mode = tk.StringVar(value="none")
+
+        tk.Radiobutton(mode_frame, text="Normal Mode", variable=self.placement_mode, 
+                    value="none", command=self.update_placement_mode).grid(row=0, column=0, padx=5)
+        tk.Radiobutton(mode_frame, text="Set Start", variable=self.placement_mode, 
+                    value="start", command=self.update_placement_mode).grid(row=0, column=1, padx=5)
+        tk.Radiobutton(mode_frame, text="Set Goal", variable=self.placement_mode, 
+                    value="goal", command=self.update_placement_mode).grid(row=0, column=2, padx=5)
+        tk.Radiobutton(mode_frame, text="Set Obstacles", variable=self.placement_mode, 
+                    value="obstacle", command=self.update_placement_mode).grid(row=0, column=3, padx=5)
+
+        alg_frame = tk.Frame(sim_window)
+        alg_frame.pack(pady=10)
+
+        tk.Button(alg_frame, text="A*", command=self.a_star).grid(row=0, column=0, padx=5, pady=5)
+        tk.Button(alg_frame, text="BFS", command=self.BFS).grid(row=0, column=1, padx=5, pady=5)
+        tk.Button(alg_frame, text="Dijkstra", command=self.dijkstra).grid(row=0, column=2, padx=5, pady=5)
+        tk.Button(alg_frame, text="DFS", command=self.DFS).grid(row=0, column=3, padx=5, pady=5)
+
+        tk.Label(sim_window, text="Click on grid to set positions", font=("Arial", 12)).pack(pady=10)
+
+        tk.Button(sim_window, text="Clear Path", command=self.clear_path).pack(pady=5)
         tk.Button(sim_window, text="Close", command=sim_window.destroy).pack(pady=10)
+
+    def update_placement_mode(self):
+        mode = self.placement_mode.get()
+        if mode == "start":
+            self.canvas.config(cursor="cross green")
+            self.current_mode = "view"  
+        elif mode == "goal":
+            self.canvas.config(cursor="cross yellow")
+            self.current_mode = "view"
+        elif mode == "obstacle":
+            self.canvas.config(cursor="cross black")
+            self.current_mode = "toggle"  
+        else:
+            self.canvas.config(cursor="")
+            self.current_mode = "view"
+
+    def cell_clicked(self, row, col):
+
+        if hasattr(self, 'placement_mode'):
+            mode = self.placement_mode.get()
+
+            if mode == "obstacle":
+
+                if self.grid[row][col] not in ["S", "G"]:
+                    self.grid[row][col] = "X" if self.grid[row][col] == "O" else "O"
+
+            elif mode == "start":
+
+                for i in range(self.grid_height):
+                    for j in range(self.grid_width):
+                        if self.grid[i][j] == "S":
+                            self.grid[i][j] = "O"
+
+                if self.grid[row][col] != "X" and self.grid[row][col] != "G":
+                    self.grid[row][col] = "S"
+
+            elif mode == "goal":
+
+                for i in range(self.grid_height):
+                    for j in range(self.grid_width):
+                        if self.grid[i][j] == "G":
+                            self.grid[i][j] = "O"
+
+                if self.grid[row][col] != "X" and self.grid[row][col] != "S":
+                    self.grid[row][col] = "G"
+
+        self.update_grid_display()
 
     def set_start_position(self):
 
@@ -208,7 +263,6 @@ class VisualGridEnv:
         tk.Button(start_dialog, text="Set Start", command=submit_coords).pack(pady=10)
 
     def set_goal_position(self):
-
         goal_dialog = tk.Toplevel(self.root)
         goal_dialog.title("Set Goal Position")
         goal_dialog.geometry("300x150")
@@ -297,7 +351,7 @@ class VisualGridEnv:
         import heapq
 
         def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])  # Manhattan distance
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])  
 
         priority_queue = [(0, start)]
         came_from = {}
@@ -327,7 +381,6 @@ class VisualGridEnv:
                         came_from[neighbor] = current
 
         self.reconstruct_path(came_from, start, goal)
-
 
     def BFS(self):
         self.clear_path()
@@ -359,14 +412,13 @@ class VisualGridEnv:
 
         self.reconstruct_path(came_from, start, goal)
 
-
     def dijkstra(self):
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
 
-        priority_queue = [(0, start)]  # (cost, node)
+        priority_queue = [(0, start)]  
         came_from = {}
         cost_so_far = {start: 0}
         directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
@@ -384,7 +436,7 @@ class VisualGridEnv:
                     0 <= neighbor[1] < self.grid_width and
                     self.grid[neighbor[0]][neighbor[1]] != "X"):
 
-                    new_cost = cost_so_far[current] + 1  # All moves cost 1
+                    new_cost = cost_so_far[current] + 1  
 
                     if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
                         cost_so_far[neighbor] = new_cost
@@ -426,7 +478,6 @@ class VisualGridEnv:
                     stack.append(neighbor)
 
         self.reconstruct_path(came_from, start, goal)
-
 
     def update_grid_display(self):
         for i in range(self.grid_height):
