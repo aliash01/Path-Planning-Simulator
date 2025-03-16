@@ -57,7 +57,6 @@ class VisualGridEnv:
         self.menu_frame = tk.Frame(self.root)
         self.menu_frame.pack(pady=10)
         
-        # Add menu buttons - Now with just one toggle button instead of add/remove
         self.toggle_btn = tk.Button(self.menu_frame, text="Toggle Obstacle Mode", command=self.toggle_obstacle_mode)
         self.toggle_btn.grid(row=0, column=0, padx=5)
         
@@ -68,7 +67,7 @@ class VisualGridEnv:
         self.sim_btn.grid(row=0, column=2, padx=5)
         
         # Track current mode - default to toggle mode
-        self.current_mode = "toggle"
+        self.current_mode = "view"
         
         # Create the grid
         self.canvas_cells = []
@@ -125,12 +124,16 @@ class VisualGridEnv:
                 self.canvas.itemconfig(self.canvas_cells[row][col], fill="white")
     
     def toggle_obstacle_mode(self):
-        self.current_mode = "toggle"
-        self.toggle_btn.config(relief=tk.SUNKEN)
+        # Toggle between "toggle" and "view" modes
+        if self.current_mode == "toggle":
+            self.current_mode = "view"
+            self.toggle_btn.config(relief=tk.RAISED, text="Enable Obstacle Mode")
+        else:
+            self.current_mode = "toggle"
+            self.toggle_btn.config(relief=tk.SUNKEN, text="Disable Obstacle Mode")
     
     def resize_grid(self):
         try:
-            # Use our custom dialog to get both width and height at once
             dialog = GridSizeDialog(
                 self.root, 
                 "Resize Grid", 
@@ -158,7 +161,124 @@ class VisualGridEnv:
             messagebox.showerror("Error", f"Failed to resize grid: {str(e)}")
     
     def run_simulation(self):
-        messagebox.showinfo("Simulation", "Simulation feature is work in progress.")
+        sim_window = tk.Toplevel(self.root)
+        sim_window.title("Simulation")
+        sim_window.geometry("400x300")  
+        
+        tk.Button(sim_window, text="Set Start Position", command=self.set_start_position).pack(pady=20)
+        tk.Button(sim_window, text="Set Goal Position", command=self.set_goal_position).pack(pady=20)
+
+        tk.Label(sim_window, text="Simulation is running...", font=("Arial", 14)).pack(pady=20)
+        
+        tk.Button(sim_window, text="Close", command=sim_window.destroy).pack(pady=10)
+
+    def set_start_position(self):
+        # Create a dialog for entering start position coordinates
+        start_dialog = tk.Toplevel(self.root)
+        start_dialog.title("Set Start Position")
+        start_dialog.geometry("300x150")
+        start_dialog.resizable(False, False)
+        
+        # Center the dialog on the screen
+        start_dialog.grab_set()  # Make dialog modal
+        
+        # Create input fields
+        tk.Label(start_dialog, text="X coordinate (0-{}):".format(self.grid_width-1)).pack(pady=(10, 5))
+        x_entry = tk.Entry(start_dialog, width=10)
+        x_entry.pack()
+        
+        tk.Label(start_dialog, text="Y coordinate (0-{}):".format(self.grid_height-1)).pack(pady=(10, 5))
+        y_entry = tk.Entry(start_dialog, width=10)
+        y_entry.pack()
+        
+        # Function to handle coordinate submission
+        def submit_coords():
+            try:
+                x = int(x_entry.get())
+                y = int(y_entry.get())
+                
+                # Validate coordinates
+                if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+                    # Reset previous start position if exists
+                    for i in range(self.grid_height):
+                        for j in range(self.grid_width):
+                            if self.grid[i][j] == "S":
+                                self.grid[i][j] = "O"
+                    
+                    # Set new start position
+                    self.grid[y][x] = "S"
+                    self.update_grid_display()  # Update the grid visualization
+                    start_dialog.destroy()
+                else:
+                    messagebox.showerror("Invalid Coordinates", 
+                                        f"Coordinates must be within grid bounds (0-{self.grid_width-1}, 0-{self.grid_height-1})")
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter valid numbers for coordinates.")
+        
+        # Submit button
+        tk.Button(start_dialog, text="Set Start", command=submit_coords).pack(pady=10)
+
+    def set_goal_position(self):
+        # Create a dialog for entering goal position coordinates
+        goal_dialog = tk.Toplevel(self.root)
+        goal_dialog.title("Set Goal Position")
+        goal_dialog.geometry("300x150")
+        goal_dialog.resizable(False, False)
+        
+        # Center the dialog on the screen
+        goal_dialog.grab_set()  # Make dialog modal
+        
+        # Create input fields
+        tk.Label(goal_dialog, text="X coordinate (0-{}):".format(self.grid_width-1)).pack(pady=(10, 5))
+        x_entry = tk.Entry(goal_dialog, width=10)
+        x_entry.pack()
+        
+        tk.Label(goal_dialog, text="Y coordinate (0-{}):".format(self.grid_height-1)).pack(pady=(10, 5))
+        y_entry = tk.Entry(goal_dialog, width=10)
+        y_entry.pack()
+        
+        # Function to handle coordinate submission
+        def submit_coords():
+            try:
+                x = int(x_entry.get())
+                y = int(y_entry.get())
+                
+                # Validate coordinates
+                if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+                    # Reset previous goal position if exists
+                    for i in range(self.grid_height):
+                        for j in range(self.grid_width):
+                            if self.grid[i][j] == "G":
+                                self.grid[i][j] = "O"
+                    
+                    # Set new goal position
+                    self.grid[y][x] = "G"
+                    self.update_grid_display()  # Update the grid visualization
+                    goal_dialog.destroy()
+                else:
+                    messagebox.showerror("Invalid Coordinates", 
+                                        f"Coordinates must be within grid bounds (0-{self.grid_width-1}, 0-{self.grid_height-1})")
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter valid numbers for coordinates.")
+        
+        # Submit button
+        tk.Button(goal_dialog, text="Set Goal", command=submit_coords).pack(pady=10)     
+
+    def update_grid_display(self):
+        for i in range(self.grid_height):
+            for j in range(self.grid_width):
+                if self.grid[i][j] == "O":
+                    fill_color = "white"
+                elif self.grid[i][j] == "X":
+                    fill_color = "black"
+                elif self.grid[i][j] == "S":
+                    fill_color = "green"
+                elif self.grid[i][j] == "G":
+                    fill_color = "yellow"
+                else:
+                    fill_color = "white"
+                
+                self.canvas.itemconfig(self.canvas_cells[i][j], fill=fill_color)
     
     def check_grid(self, check):
         for row in self.grid:
