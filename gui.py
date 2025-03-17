@@ -3,6 +3,15 @@ from tkinter import messagebox
 from tkinter import simpledialog
 import heapq
 import time
+from pathfinding import PathfindingAlgorithms
+
+'''
+Grid-based Pathfinding Visualiser
+
+A visualisation tool which demonstrates various pathfinding algorithms
+on a customisable grid. Users can create obstacles, set start/goal positions,
+and observe how different algorithms explore the grid.
+'''
 
 class GridSizeDialog(simpledialog.Dialog):
     def __init__(self, parent, title=None, initial_width=5, initial_height=5):
@@ -40,11 +49,24 @@ class GridSizeDialog(simpledialog.Dialog):
             return False
 
 class VisualGridEnv:
+    '''
+    Main class for pathfinding visualisation environment.
+
+    Provides an interactive grid where users can:
+    - Place start, goal, and obstacle blocks
+    - Run different pathfinding algorithms
+    - Visualize algorithm explanation and resulting paths
+    - Customise grid dimensions
+    '''
+
+    # --- Grid Setup and Display ---
     def __init__(self, grid_width=5, grid_height=5, cell_size=80):
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.cell_size = cell_size
         self.grid = [["O" for _ in range(self.grid_width)] for _ in range(self.grid_height)]
+
+        self.pathfinding = PathfindingAlgorithms(self.grid, self.grid_height, self.grid_width)
 
         self.root = tk.Tk()
         self.root.title("Grid Environment Simulator")
@@ -99,18 +121,68 @@ class VisualGridEnv:
     def update_grid_display(self):
         for i in range(self.grid_height):
             for j in range(self.grid_width):
-                fill_color = "white" if self.grid[i][j] == "O" else "black"
+                if self.grid[i][j] == "O":
+                    fill_color = "white"
+                elif self.grid[i][j] == "X":
+                    fill_color = "black"
+                elif self.grid[i][j] == "S":
+                    fill_color = "green"
+                elif self.grid[i][j] == "G":
+                    fill_color = "yellow"
+                elif self.grid[i][j] == "P":  
+                    fill_color = "blue"
+                else:
+                    fill_color = "white"
+
                 self.canvas.itemconfig(self.canvas_cells[i][j], fill=fill_color)
 
-    def cell_clicked(self, row, col):
-        if self.current_mode == "toggle":
+    # --- User Interaction Handlers ---
 
-            if self.grid[row][col] == "O":
-                self.grid[row][col] = "X"
-                self.canvas.itemconfig(self.canvas_cells[row][col], fill="black")
-            else:
-                self.grid[row][col] = "O"
-                self.canvas.itemconfig(self.canvas_cells[row][col], fill="white")
+    def cell_clicked(self, row, col):
+        if hasattr(self, 'placement_mode'):
+            mode = self.placement_mode.get()
+
+            if mode == "obstacle":
+
+                if self.grid[row][col] not in ["S", "G"]:
+                    self.grid[row][col] = "X" if self.grid[row][col] == "O" else "O"
+
+            elif mode == "start":
+
+                for i in range(self.grid_height):
+                    for j in range(self.grid_width):
+                        if self.grid[i][j] == "S":
+                            self.grid[i][j] = "O"
+
+                if self.grid[row][col] != "X" and self.grid[row][col] != "G":
+                    self.grid[row][col] = "S"
+
+            elif mode == "goal":
+
+                for i in range(self.grid_height):
+                    for j in range(self.grid_width):
+                        if self.grid[i][j] == "G":
+                            self.grid[i][j] = "O"
+
+                if self.grid[row][col] != "X" and self.grid[row][col] != "S":
+                    self.grid[row][col] = "G"
+
+        self.update_grid_display()
+
+    def update_placement_mode(self):
+        mode = self.placement_mode.get()
+        if mode == "start":
+            self.canvas.config(cursor="cross green")
+            self.current_mode = "view"  
+        elif mode == "goal":
+            self.canvas.config(cursor="cross yellow")
+            self.current_mode = "view"
+        elif mode == "obstacle":
+            self.canvas.config(cursor="cross black")
+            self.current_mode = "toggle"  
+        else:
+            self.canvas.config(cursor="")
+            self.current_mode = "view"
 
     def resize_grid(self):
         try:
@@ -132,6 +204,8 @@ class VisualGridEnv:
                 self.grid_width = new_width
                 self.grid_height = new_height
                 self.grid = new_grid
+
+                self.pathfinding.update_grid_reference(self.grid, self.grid_height, self.grid_width)
 
                 self.create_grid()
 
@@ -170,13 +244,12 @@ class VisualGridEnv:
         tk.Button(alg_frame, text="BFS", command=self.BFS).grid(row=0, column=1, padx=5, pady=5)
         tk.Button(alg_frame, text="Dijkstra", command=self.dijkstra).grid(row=0, column=2, padx=5, pady=5)
         tk.Button(alg_frame, text="DFS", command=self.DFS).grid(row=0, column=3, padx=5, pady=5)
-        
-        # Add visualization options
+
         vis_frame = tk.Frame(sim_window)
         vis_frame.pack(pady=5)
-        
+
         self.visualization_mode = tk.StringVar(value="final_path")
-        
+
         tk.Label(vis_frame, text="Visualization:").grid(row=0, column=0, padx=5)
         tk.Radiobutton(vis_frame, text="Final Path Only", variable=self.visualization_mode, 
                     value="final_path").grid(row=0, column=1, padx=5)
@@ -188,55 +261,9 @@ class VisualGridEnv:
         tk.Button(sim_window, text="Clear Path", command=self.clear_path).pack(pady=5)
         tk.Button(sim_window, text="Close", command=sim_window.destroy).pack(pady=10)
 
-    def update_placement_mode(self):
-        mode = self.placement_mode.get()
-        if mode == "start":
-            self.canvas.config(cursor="cross green")
-            self.current_mode = "view"  
-        elif mode == "goal":
-            self.canvas.config(cursor="cross yellow")
-            self.current_mode = "view"
-        elif mode == "obstacle":
-            self.canvas.config(cursor="cross black")
-            self.current_mode = "toggle"  
-        else:
-            self.canvas.config(cursor="")
-            self.current_mode = "view"
-
-    def cell_clicked(self, row, col):
-
-        if hasattr(self, 'placement_mode'):
-            mode = self.placement_mode.get()
-
-            if mode == "obstacle":
-
-                if self.grid[row][col] not in ["S", "G"]:
-                    self.grid[row][col] = "X" if self.grid[row][col] == "O" else "O"
-
-            elif mode == "start":
-
-                for i in range(self.grid_height):
-                    for j in range(self.grid_width):
-                        if self.grid[i][j] == "S":
-                            self.grid[i][j] = "O"
-
-                if self.grid[row][col] != "X" and self.grid[row][col] != "G":
-                    self.grid[row][col] = "S"
-
-            elif mode == "goal":
-
-                for i in range(self.grid_height):
-                    for j in range(self.grid_width):
-                        if self.grid[i][j] == "G":
-                            self.grid[i][j] = "O"
-
-                if self.grid[row][col] != "X" and self.grid[row][col] != "S":
-                    self.grid[row][col] = "G"
-
-        self.update_grid_display()
+# --- Position Management --- 
 
     def set_start_position(self):
-
         start_dialog = tk.Toplevel(self.root)
         start_dialog.title("Set Start Position")
         start_dialog.geometry("300x150")
@@ -330,10 +357,18 @@ class VisualGridEnv:
 
         return start, goal
 
+    def check_grid(self, check):
+        for row in self.grid:
+            if check in row:
+                return True
+        return False
+
+# --- Path Management ---
+
     def clear_path(self):
         for i in range(self.grid_height):
             for j in range(self.grid_width):
-                if self.grid[i][j] == "P":  
+                if self.grid[i][j] not in ["S", "G", "X"]:  
                     self.grid[i][j] = "O"  
         self.update_grid_display()
 
@@ -348,54 +383,32 @@ class VisualGridEnv:
             path.append(current)
             current = came_from[current]
 
-        # Animate the path
         for i, j in reversed(path):
             if self.grid[i][j] not in ["S", "G"]:
                 self.grid[i][j] = "P"
                 self.canvas.itemconfig(self.canvas_cells[i][j], fill="blue")
                 self.root.update()
-                time.sleep(0.1)  # Adjust animation speed as needed
+                time.sleep(0.1)  
 
         messagebox.showinfo(algorithm_name, "Path found!")
+
+    def visualize_exploration(self, node, is_goal=False):
+        if self.visualization_mode.get() == "exploration":
+            if self.grid[node[0]][node[1]] not in ["S", "G"]:
+
+                self.canvas.itemconfig(self.canvas_cells[node[0]][node[1]], fill="lightblue")
+                self.root.update()
+                time.sleep(0.1)  
+
+# --- Pathfinding Algorithms ---
 
     def a_star(self):
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
-
-        import heapq
-
-        def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])  
-
-        priority_queue = [(0, start)]
-        came_from = {}
-        g_score = {start: 0}
-        f_score = {start: heuristic(start, goal)}
-        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-
-        while priority_queue:
-            _, current = heapq.heappop(priority_queue)
-
-            if current == goal:
-                break
-
-            for dy, dx in directions:
-                neighbor = (current[0] + dy, current[1] + dx)
-
-                if (0 <= neighbor[0] < self.grid_height and
-                    0 <= neighbor[1] < self.grid_width and
-                    self.grid[neighbor[0]][neighbor[1]] != "X"):
-
-                    temp_g_score = g_score[current] + 1
-
-                    if neighbor not in g_score or temp_g_score < g_score[neighbor]:
-                        g_score[neighbor] = temp_g_score
-                        f_score[neighbor] = temp_g_score + heuristic(neighbor, goal)
-                        heapq.heappush(priority_queue, (f_score[neighbor], neighbor))
-                        came_from[neighbor] = current
-
+            
+        came_from = self.pathfinding.a_star(start, goal, self.visualize_exploration)
         self.reconstruct_path(came_from, start, goal, "A*")
 
     def BFS(self):
@@ -403,29 +416,8 @@ class VisualGridEnv:
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
-
-        from collections import deque
-        queue = deque([start])
-        came_from = {start: None}
-        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-
-        while queue:
-            current = queue.popleft()
-
-            if current == goal:
-                break
-
-            for dy, dx in directions:
-                neighbor = (current[0] + dy, current[1] + dx)
-
-                if (0 <= neighbor[0] < self.grid_height and
-                    0 <= neighbor[1] < self.grid_width and
-                    self.grid[neighbor[0]][neighbor[1]] != "X" and
-                    neighbor not in came_from):
-
-                    came_from[neighbor] = current
-                    queue.append(neighbor)
-
+            
+        came_from = self.pathfinding.bfs(start, goal, self.visualize_exploration)
         self.reconstruct_path(came_from, start, goal, "BFS")
 
     def dijkstra(self):
@@ -433,32 +425,8 @@ class VisualGridEnv:
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
-
-        priority_queue = [(0, start)]  
-        came_from = {}
-        cost_so_far = {start: 0}
-        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-
-        while priority_queue:
-            current_cost, current = heapq.heappop(priority_queue)
-
-            if current == goal:
-                break
-
-            for dy, dx in directions:
-                neighbor = (current[0] + dy, current[1] + dx)
-
-                if (0 <= neighbor[0] < self.grid_height and
-                    0 <= neighbor[1] < self.grid_width and
-                    self.grid[neighbor[0]][neighbor[1]] != "X"):
-
-                    new_cost = cost_so_far[current] + 1  
-
-                    if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
-                        cost_so_far[neighbor] = new_cost
-                        heapq.heappush(priority_queue, (new_cost, neighbor))
-                        came_from[neighbor] = current
-
+            
+        came_from = self.pathfinding.dijkstra(start, goal, self.visualize_exploration)
         self.reconstruct_path(came_from, start, goal, "Dijkstra")
 
     def DFS(self):
@@ -466,58 +434,9 @@ class VisualGridEnv:
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
             return
-
-        stack = [start]
-        came_from = {}
-        visited = set()
-        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-
-        while stack:
-            current = stack.pop()
-
-            if current == goal:
-                break
-
-            if current in visited:
-                continue
-            visited.add(current)
-
-            for dy, dx in directions:
-                neighbor = (current[0] + dy, current[1] + dx)
-
-                if (0 <= neighbor[0] < self.grid_height and
-                    0 <= neighbor[1] < self.grid_width and
-                    self.grid[neighbor[0]][neighbor[1]] != "X" and
-                    neighbor not in visited):
-
-                    came_from[neighbor] = current
-                    stack.append(neighbor)
-
+            
+        came_from = self.pathfinding.dfs(start, goal, self.visualize_exploration)
         self.reconstruct_path(came_from, start, goal, "DFS")
-
-    def update_grid_display(self):
-        for i in range(self.grid_height):
-            for j in range(self.grid_width):
-                if self.grid[i][j] == "O":
-                    fill_color = "white"
-                elif self.grid[i][j] == "X":
-                    fill_color = "black"
-                elif self.grid[i][j] == "S":
-                    fill_color = "green"
-                elif self.grid[i][j] == "G":
-                    fill_color = "yellow"
-                elif self.grid[i][j] == "P":  
-                    fill_color = "blue"
-                else:
-                    fill_color = "white"
-
-                self.canvas.itemconfig(self.canvas_cells[i][j], fill=fill_color)
-
-    def check_grid(self, check):
-        for row in self.grid:
-            if check in row:
-                return True
-        return False
 
 class ReinforcementLearning:
     def __init__(self, grid_env):
