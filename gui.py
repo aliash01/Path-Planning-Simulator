@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
 import heapq
+import time
 
 class GridSizeDialog(simpledialog.Dialog):
     def __init__(self, parent, title=None, initial_width=5, initial_height=5):
@@ -28,8 +29,8 @@ class GridSizeDialog(simpledialog.Dialog):
             width = int(self.width_entry.get())
             height = int(self.height_entry.get())
 
-            if width < 1 or width > 20 or height < 1 or height > 20:
-                messagebox.showerror("Invalid Input", "Grid dimensions must be between 1 and 20.")
+            if width < 1 or width > 10 or height < 1 or height > 10:
+                messagebox.showerror("Invalid Input", "Grid dimensions must be between 1 and 10.")
                 return False
 
             self.result = (width, height)
@@ -169,6 +170,18 @@ class VisualGridEnv:
         tk.Button(alg_frame, text="BFS", command=self.BFS).grid(row=0, column=1, padx=5, pady=5)
         tk.Button(alg_frame, text="Dijkstra", command=self.dijkstra).grid(row=0, column=2, padx=5, pady=5)
         tk.Button(alg_frame, text="DFS", command=self.DFS).grid(row=0, column=3, padx=5, pady=5)
+        
+        # Add visualization options
+        vis_frame = tk.Frame(sim_window)
+        vis_frame.pack(pady=5)
+        
+        self.visualization_mode = tk.StringVar(value="final_path")
+        
+        tk.Label(vis_frame, text="Visualization:").grid(row=0, column=0, padx=5)
+        tk.Radiobutton(vis_frame, text="Final Path Only", variable=self.visualization_mode, 
+                    value="final_path").grid(row=0, column=1, padx=5)
+        tk.Radiobutton(vis_frame, text="Show Exploration", variable=self.visualization_mode, 
+                    value="exploration").grid(row=0, column=2, padx=5)
 
         tk.Label(sim_window, text="Click on grid to set positions", font=("Arial", 12)).pack(pady=10)
 
@@ -324,9 +337,9 @@ class VisualGridEnv:
                     self.grid[i][j] = "O"  
         self.update_grid_display()
 
-    def reconstruct_path(self, came_from, start, goal):
+    def reconstruct_path(self, came_from, start, goal, algorithm_name="Pathfinding"):
         if goal not in came_from:
-            messagebox.showinfo("Dijkstra", "No path found!")
+            messagebox.showinfo(algorithm_name, "No path found!")
             return
 
         path = []
@@ -335,12 +348,15 @@ class VisualGridEnv:
             path.append(current)
             current = came_from[current]
 
+        # Animate the path
         for i, j in reversed(path):
             if self.grid[i][j] not in ["S", "G"]:
-                self.grid[i][j] = "P"  
+                self.grid[i][j] = "P"
+                self.canvas.itemconfig(self.canvas_cells[i][j], fill="blue")
+                self.root.update()
+                time.sleep(0.1)  # Adjust animation speed as needed
 
-        self.update_grid_display()
-        messagebox.showinfo("Dijkstra", "Path found!")
+        messagebox.showinfo(algorithm_name, "Path found!")
 
     def a_star(self):
         self.clear_path()
@@ -380,7 +396,7 @@ class VisualGridEnv:
                         heapq.heappush(priority_queue, (f_score[neighbor], neighbor))
                         came_from[neighbor] = current
 
-        self.reconstruct_path(came_from, start, goal)
+        self.reconstruct_path(came_from, start, goal, "A*")
 
     def BFS(self):
         self.clear_path()
@@ -410,7 +426,7 @@ class VisualGridEnv:
                     came_from[neighbor] = current
                     queue.append(neighbor)
 
-        self.reconstruct_path(came_from, start, goal)
+        self.reconstruct_path(came_from, start, goal, "BFS")
 
     def dijkstra(self):
         self.clear_path()
@@ -443,7 +459,7 @@ class VisualGridEnv:
                         heapq.heappush(priority_queue, (new_cost, neighbor))
                         came_from[neighbor] = current
 
-        self.reconstruct_path(came_from, start, goal)
+        self.reconstruct_path(came_from, start, goal, "Dijkstra")
 
     def DFS(self):
         self.clear_path()
@@ -477,7 +493,7 @@ class VisualGridEnv:
                     came_from[neighbor] = current
                     stack.append(neighbor)
 
-        self.reconstruct_path(came_from, start, goal)
+        self.reconstruct_path(came_from, start, goal, "DFS")
 
     def update_grid_display(self):
         for i in range(self.grid_height):
