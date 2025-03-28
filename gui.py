@@ -1,3 +1,6 @@
+# =========================
+# IMPORTS & DEPENDENCIES
+# =========================
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
@@ -11,9 +14,20 @@ Grid-based Pathfinding Visualiser
 A visualisation tool which demonstrates various pathfinding algorithms
 on a customisable grid. Users can create obstacles, set start/goal positions,
 and observe how different algorithms explore the grid.
+
+Key Features:
+- Dynamic grid resizing
+- Visual representation of explored nodes
+- Interactive UI using Tkinter
+
+Author: Ali Reza Ashkboos
 '''
 
 class GridSizeDialog(simpledialog.Dialog):
+    """
+    A dialog window that allows the user to input the grid width and height.
+    Ensures valid dimensions before applying changes.
+    """
     def __init__(self, parent, title=None, initial_width=5, initial_height=5):
         self.width = initial_width
         self.height = initial_height
@@ -38,7 +52,8 @@ class GridSizeDialog(simpledialog.Dialog):
             width = int(self.width_entry.get())
             height = int(self.height_entry.get())
 
-            if width < 1 or width > 10 or height < 1 or height > 10:
+            # Ensures dimensions are within allowed range
+            if width < 1 or width > 10 or height < 1 or height > 10: 
                 messagebox.showerror("Invalid Input", "Grid dimensions must be between 1 and 10.")
                 return False
 
@@ -61,13 +76,21 @@ class VisualGridEnv:
 
     # --- Grid Setup and Display ---
     def __init__(self, grid_width=5, grid_height=5, cell_size=80):
+        # Initialize grid dimensions and cell properties
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.cell_size = cell_size
+        
+        # Create a 2D grid filled with "O" (open space)
         self.grid = [["O" for _ in range(self.grid_width)] for _ in range(self.grid_height)]
 
+        # Bool for checking if the simulation is currently running (To prevent grid editing during simulation)
+        self.simulation_running = False
+
+        # Imports pathfinding algorithms from pathfinding.py file (Separated for cleaner/modular code)
         self.pathfinding = PathfindingAlgorithms(self.grid, self.grid_height, self.grid_width)
 
+        # Creates main window + buttons
         self.root = tk.Tk()
         self.root.title("Grid Environment Simulator")
         self.root.resizable(False, False)
@@ -90,6 +113,8 @@ class VisualGridEnv:
         self.root.mainloop()
 
     def create_grid(self):
+        """Creates a new grid based on current dimensions and initializes the UI elements."""
+        # Clear any existing grid widgets before recreating
         for widget in self.grid_frame.winfo_children():
             widget.destroy()
 
@@ -119,6 +144,15 @@ class VisualGridEnv:
             self.canvas_cells.append(row_cells)
 
     def update_grid_display(self):
+        """ 
+        Sets grid colours based on what each grid holds
+
+        Open space: White
+        Obstacle: Black
+        Start: Green
+        Goal: Yellow
+        Path: Blue     
+        """
         for i in range(self.grid_height):
             for j in range(self.grid_width):
                 if self.grid[i][j] == "O":
@@ -139,37 +173,42 @@ class VisualGridEnv:
     # --- User Interaction Handlers ---
 
     def cell_clicked(self, row, col):
+        """
+        1) Verifies simulation is not running
+        2) Checks current edit mode (obstacle, start, goal)
+        3) Will update grid based on mode
+        """
+        if self.simulation_running:  
+            return
         if hasattr(self, 'placement_mode'):
             mode = self.placement_mode.get()
 
             if mode == "obstacle":
-
                 if self.grid[row][col] not in ["S", "G"]:
                     self.grid[row][col] = "X" if self.grid[row][col] == "O" else "O"
 
             elif mode == "start":
-
                 for i in range(self.grid_height):
                     for j in range(self.grid_width):
                         if self.grid[i][j] == "S":
                             self.grid[i][j] = "O"
-
+                # Will not allow editing of squares other than current mode square and empty squares
                 if self.grid[row][col] != "X" and self.grid[row][col] != "G":
                     self.grid[row][col] = "S"
 
             elif mode == "goal":
-
                 for i in range(self.grid_height):
                     for j in range(self.grid_width):
                         if self.grid[i][j] == "G":
                             self.grid[i][j] = "O"
-
+                # Will not allow editing of squares other than current mode square and empty squares
                 if self.grid[row][col] != "X" and self.grid[row][col] != "S":
                     self.grid[row][col] = "G"
 
         self.update_grid_display()
 
     def update_placement_mode(self):
+        """Updates placement mode based on radio button in run_simulation method"""
         mode = self.placement_mode.get()
         if mode == "start":
             self.canvas.config(cursor="cross green")
@@ -185,6 +224,7 @@ class VisualGridEnv:
             self.current_mode = "view"
 
     def resize_grid(self):
+        """Resizes grid"""
         try:
             dialog = GridSizeDialog(
                 self.root, 
@@ -213,6 +253,7 @@ class VisualGridEnv:
             messagebox.showerror("Error", f"Failed to resize grid: {str(e)}")
 
     def run_simulation(self):
+        # Creates New Window for Simulation Options
         sim_window = tk.Toplevel(self.root)
         sim_window.title("Simulation")
         sim_window.geometry("400x300")  
@@ -228,6 +269,7 @@ class VisualGridEnv:
 
         self.placement_mode = tk.StringVar(value="none")
 
+        # Radio buttons for edit mode selection
         tk.Radiobutton(mode_frame, text="Normal Mode", variable=self.placement_mode, 
                     value="none", command=self.update_placement_mode).grid(row=0, column=0, padx=5)
         tk.Radiobutton(mode_frame, text="Set Start", variable=self.placement_mode, 
@@ -237,6 +279,7 @@ class VisualGridEnv:
         tk.Radiobutton(mode_frame, text="Set Obstacles", variable=self.placement_mode, 
                     value="obstacle", command=self.update_placement_mode).grid(row=0, column=3, padx=5)
 
+        # Pathfinding algorithm selection buttons
         alg_frame = tk.Frame(sim_window)
         alg_frame.pack(pady=10)
 
@@ -248,6 +291,7 @@ class VisualGridEnv:
         vis_frame = tk.Frame(sim_window)
         vis_frame.pack(pady=5)
 
+        # Radio buttons for viewing options
         self.visualization_mode = tk.StringVar(value="final_path")
 
         tk.Label(vis_frame, text="Visualization:").grid(row=0, column=0, padx=5)
@@ -264,6 +308,7 @@ class VisualGridEnv:
 # --- Position Management --- 
 
     def set_start_position(self):
+        # Sets start position
         start_dialog = tk.Toplevel(self.root)
         start_dialog.title("Set Start Position")
         start_dialog.geometry("300x150")
@@ -303,6 +348,7 @@ class VisualGridEnv:
         tk.Button(start_dialog, text="Set Start", command=submit_coords).pack(pady=10)
 
     def set_goal_position(self):
+        """Sets goal position"""
         goal_dialog = tk.Toplevel(self.root)
         goal_dialog.title("Set Goal Position")
         goal_dialog.geometry("300x150")
@@ -342,6 +388,7 @@ class VisualGridEnv:
         tk.Button(goal_dialog, text="Set Goal", command=submit_coords).pack(pady=10)
 
     def find_start_and_goal(self):
+        """Verifies and locates start+goal positions on the grid"""
         if not self.check_grid("S") or not self.check_grid("G"):
             messagebox.showwarning("Missing Points", "Please set both start and goal positions.")
             return None, None
@@ -364,8 +411,8 @@ class VisualGridEnv:
         return False
 
 # --- Path Management ---
-
     def clear_path(self):
+        # Clears generated path (Blue path)
         for i in range(self.grid_height):
             for j in range(self.grid_width):
                 if self.grid[i][j] not in ["S", "G", "X"]:  
@@ -373,6 +420,7 @@ class VisualGridEnv:
         self.update_grid_display()
 
     def reconstruct_path(self, came_from, start, goal, algorithm_name="Pathfinding"):
+        # Method for creating the generated path
         if goal not in came_from:
             messagebox.showinfo(algorithm_name, "No path found!")
             return
@@ -391,6 +439,7 @@ class VisualGridEnv:
                 time.sleep(0.1)  
 
         messagebox.showinfo(algorithm_name, "Path found!")
+        self.simulation_running = False
 
     def visualize_exploration(self, node, is_goal=False):
         if self.visualization_mode.get() == "exploration":
@@ -403,6 +452,10 @@ class VisualGridEnv:
 # --- Pathfinding Algorithms ---
 
     def a_star(self):
+        if self.simulation_running:
+            return  
+        
+        self.simulation_running = True
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
@@ -412,6 +465,10 @@ class VisualGridEnv:
         self.reconstruct_path(came_from, start, goal, "A*")
 
     def BFS(self):
+        if self.simulation_running:
+            return  
+        
+        self.simulation_running = True
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
@@ -421,6 +478,10 @@ class VisualGridEnv:
         self.reconstruct_path(came_from, start, goal, "BFS")
 
     def dijkstra(self):
+        if self.simulation_running:
+            return  
+        
+        self.simulation_running = True
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
@@ -430,6 +491,10 @@ class VisualGridEnv:
         self.reconstruct_path(came_from, start, goal, "Dijkstra")
 
     def DFS(self):
+        if self.simulation_running:
+            return  
+        
+        self.simulation_running = True
         self.clear_path()
         start, goal = self.find_start_and_goal()
         if start is None or goal is None:
@@ -437,10 +502,6 @@ class VisualGridEnv:
             
         came_from = self.pathfinding.dfs(start, goal, self.visualize_exploration)
         self.reconstruct_path(came_from, start, goal, "DFS")
-
-class ReinforcementLearning:
-    def __init__(self, grid_env):
-        self.grid_env = grid_env
 
 if __name__ == "__main__":
     app = VisualGridEnv()
