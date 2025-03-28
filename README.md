@@ -4,6 +4,8 @@ I couldn't find anything about implementing and simulating path-planning when I 
 
 So after I finished I decided to make this. Made it for fun and for educational purposes.
 
+Currently has A*, BFS, Dijkstra and DFS.
+
 ## Features
 - Allows Grid Customisation (Resizing, Obstacle/Start/Goal Positioning)
 - Tkinter UI
